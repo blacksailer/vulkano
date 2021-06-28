@@ -122,15 +122,19 @@ pub use self::pipeline::AccessFlags;
 pub use self::pipeline::PipelineMemoryAccess;
 pub use self::pipeline::PipelineStage;
 pub use self::pipeline::PipelineStages;
+pub use self::semaphore::ExternalSemaphoreHandleType;
 pub use self::semaphore::Semaphore;
+pub use self::semaphore::SemaphoreError;
 pub use self::external_semaphore_handle_type::ExternalSemaphoreHandleType;
 pub use self::future::then_signal_exported_semaphore;
+
 mod event;
 mod fence;
 mod future;
 mod pipeline;
 mod semaphore;
 mod external_semaphore_handle_type;
+
 /// Declares in which queue(s) a resource can be used.
 ///
 /// When you create a buffer or an image, you have to tell the Vulkan library in which queue
