@@ -906,12 +906,13 @@ impl MappedDeviceMemory {
                 ..Default::default()
             };
 
-            // TODO: check result?
-            fns.v1_0.invalidate_mapped_memory_ranges(
+            // TODO: return result instead?
+            check_errors(fns.v1_0.invalidate_mapped_memory_ranges(
                 self.memory.device().internal_object(),
                 1,
                 &range,
-            );
+            ))
+            .unwrap();
         }
 
         CpuAccess {
@@ -1143,13 +1144,13 @@ impl<'a, T: ?Sized + 'a> Drop for CpuAccess<'a, T> {
                 ..Default::default()
             };
 
-            // TODO: check result?
             unsafe {
-                fns.v1_0.flush_mapped_memory_ranges(
+                check_errors(fns.v1_0.flush_mapped_memory_ranges(
                     self.mem.as_ref().device().internal_object(),
                     1,
                     &range,
-                );
+                ))
+                .unwrap();
             }
         }
     }
