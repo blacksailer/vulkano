@@ -34,6 +34,7 @@ use crate::memory::{DedicatedAlloc, MemoryRequirements};
 use crate::memory::{DeviceMemoryAllocError, ExternalMemoryHandleType};
 use crate::sync::AccessError;
 use crate::sync::Sharing;
+use crate::DeviceSize;
 use smallvec::SmallVec;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -92,7 +93,14 @@ impl<T> DeviceLocalBuffer<T> {
     where
         I: IntoIterator<Item = QueueFamily<'a>>,
     {
-        unsafe { DeviceLocalBuffer::raw(device, mem::size_of::<T>(), usage, queue_families) }
+        unsafe {
+            DeviceLocalBuffer::raw(
+                device,
+                mem::size_of::<T>() as DeviceSize,
+                usage,
+                queue_families,
+            )
+        }
     }
 }
 
@@ -116,14 +124,21 @@ impl<T> DeviceLocalBuffer<[T]> {
     #[inline]
     pub fn array<'a, I>(
         device: Arc<Device>,
-        len: usize,
+        len: DeviceSize,
         usage: BufferUsage,
         queue_families: I,
     ) -> Result<Arc<DeviceLocalBuffer<[T]>>, DeviceMemoryAllocError>
     where
         I: IntoIterator<Item = QueueFamily<'a>>,
     {
-        unsafe { DeviceLocalBuffer::raw(device, len * mem::size_of::<T>(), usage, queue_families) }
+        unsafe {
+            DeviceLocalBuffer::raw(
+                device,
+                len * mem::size_of::<T>() as DeviceSize,
+                usage,
+                queue_families,
+            )
+        }
     }
 }
 
@@ -183,7 +198,7 @@ impl<T: ?Sized> DeviceLocalBuffer<T> {
     ///
     pub unsafe fn raw<'a, I>(
         device: Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         usage: BufferUsage,
         queue_families: I,
     ) -> Result<Arc<DeviceLocalBuffer<T>>, DeviceMemoryAllocError>
@@ -227,7 +242,7 @@ impl<T: ?Sized> DeviceLocalBuffer<T> {
     #[cfg(target_os = "linux")]
     pub unsafe fn raw_with_exportable_fd<'a, I>(
         device: Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         usage: BufferUsage,
         queue_families: I,
     ) -> Result<Arc<DeviceLocalBuffer<T>>, DeviceMemoryAllocError>
@@ -272,7 +287,7 @@ impl<T: ?Sized> DeviceLocalBuffer<T> {
 
     unsafe fn build_buffer(
         device: &Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         usage: BufferUsage,
         queue_families: &SmallVec<[u32; 4]>,
     ) -> Result<(UnsafeBuffer, MemoryRequirements), DeviceMemoryAllocError> {
@@ -371,12 +386,12 @@ where
     }
 
     #[inline]
-    fn size(&self) -> usize {
+    fn size(&self) -> DeviceSize {
         self.inner.size()
     }
 
     #[inline]
-    fn conflict_key(&self) -> (u64, usize) {
+    fn conflict_key(&self) -> (u64, u64) {
         (self.inner.key(), 0)
     }
 

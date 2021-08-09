@@ -31,6 +31,7 @@ use crate::memory::DeviceMemory;
 use crate::memory::DeviceMemoryAllocError;
 use crate::memory::MemoryRequirements;
 use crate::sync::Sharing;
+use crate::DeviceSize;
 use crate::Error;
 use crate::OomError;
 use crate::VulkanObject;
@@ -52,7 +53,7 @@ use std::sync::Arc;
 pub struct UnsafeBuffer {
     buffer: ash::vk::Buffer,
     device: Arc<Device>,
-    size: usize,
+    size: DeviceSize,
     usage: BufferUsage,
 }
 
@@ -68,7 +69,7 @@ impl UnsafeBuffer {
     ///
     pub unsafe fn new<'a, I>(
         device: Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         mut usage: BufferUsage,
         sharing: Sharing<I>,
         sparse: Option<SparseLevel>,
@@ -133,7 +134,7 @@ impl UnsafeBuffer {
 
             let infos = ash::vk::BufferCreateInfo {
                 flags,
-                size: size as u64,
+                size,
                 usage: usage_bits,
                 sharing_mode: sh_mode,
                 queue_family_index_count: sh_indices.len() as u32,
@@ -153,7 +154,7 @@ impl UnsafeBuffer {
 
         let mem_reqs = {
             #[inline]
-            fn align(val: usize, al: usize) -> usize {
+            fn align(val: DeviceSize, al: DeviceSize) -> DeviceSize {
                 al * (1 + (val - 1) / al)
             }
 
@@ -196,7 +197,7 @@ impl UnsafeBuffer {
                         );
                 }
 
-                debug_assert!(output.memory_requirements.size >= size as u64);
+                debug_assert!(output.memory_requirements.size >= size);
                 debug_assert!(output.memory_requirements.memory_type_bits != 0);
 
                 let mut out = MemoryRequirements::from(output.memory_requirements);
@@ -213,7 +214,7 @@ impl UnsafeBuffer {
                     output.as_mut_ptr(),
                 );
                 let output = output.assume_init();
-                debug_assert!(output.size >= size as u64);
+                debug_assert!(output.size >= size);
                 debug_assert!(output.memory_type_bits != 0);
                 MemoryRequirements::from(output)
             };
@@ -223,21 +224,21 @@ impl UnsafeBuffer {
             if usage.uniform_texel_buffer || usage.storage_texel_buffer {
                 output.alignment = align(
                     output.alignment,
-                    properties.min_texel_buffer_offset_alignment as usize,
+                    properties.min_texel_buffer_offset_alignment,
                 );
             }
 
             if usage.storage_buffer {
                 output.alignment = align(
                     output.alignment,
-                    properties.min_storage_buffer_offset_alignment as usize,
+                    properties.min_storage_buffer_offset_alignment,
                 );
             }
 
             if usage.uniform_buffer {
                 output.alignment = align(
                     output.alignment,
-                    properties.min_uniform_buffer_offset_alignment as usize,
+                    properties.min_uniform_buffer_offset_alignment,
                 );
             }
 
@@ -245,9 +246,9 @@ impl UnsafeBuffer {
         };
 
         let obj = UnsafeBuffer {
-            buffer: buffer,
+            buffer,
             device: device.clone(),
-            size: size as usize,
+            size,
             usage,
         };
 
@@ -443,7 +444,11 @@ impl UnsafeBuffer {
         Ok((obj, mem_reqs))
     }
     /// Binds device memory to this buffer.
-    pub unsafe fn bind_memory(&self, memory: &DeviceMemory, offset: usize) -> Result<(), OomError> {
+    pub unsafe fn bind_memory(
+        &self,
+        memory: &DeviceMemory,
+        offset: DeviceSize,
+    ) -> Result<(), OomError> {
         let fns = self.device.fns();
 
         // We check for correctness in debug mode.
@@ -456,8 +461,8 @@ impl UnsafeBuffer {
             );
 
             let mem_reqs = mem_reqs.assume_init();
-            mem_reqs.size <= (memory.size() - offset) as u64
-                && (offset as u64 % mem_reqs.alignment) == 0
+            mem_reqs.size <= (memory.size() - offset)
+                && (offset % mem_reqs.alignment) == 0
                 && mem_reqs.memory_type_bits & (1 << memory.memory_type().id()) != 0
         });
 
@@ -465,19 +470,13 @@ impl UnsafeBuffer {
         {
             let properties = self.device().physical_device().properties();
             if self.usage().uniform_texel_buffer || self.usage().storage_texel_buffer {
-                debug_assert!(
-                    offset % properties.min_texel_buffer_offset_alignment as usize == 0
-                );
+                debug_assert!(offset % properties.min_texel_buffer_offset_alignment == 0);
             }
             if self.usage().storage_buffer {
-                debug_assert!(
-                    offset % properties.min_storage_buffer_offset_alignment as usize == 0
-                );
+                debug_assert!(offset % properties.min_storage_buffer_offset_alignment == 0);
             }
             if self.usage().uniform_buffer {
-                debug_assert!(
-                    offset % properties.min_uniform_buffer_offset_alignment as usize == 0
-                );
+                debug_assert!(offset % properties.min_uniform_buffer_offset_alignment == 0);
             }
         }
 
@@ -485,14 +484,14 @@ impl UnsafeBuffer {
             self.device.internal_object(),
             self.buffer,
             memory.internal_object(),
-            offset as ash::vk::DeviceSize,
+            offset,
         ))?;
         Ok(())
     }
 
     /// Returns the size of the buffer in bytes.
     #[inline]
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> DeviceSize {
         self.size
     }
 
