@@ -21,7 +21,13 @@ use crate::Version;
 use crate::VulkanObject;
 use std::error;
 use std::fmt;
-#[cfg(target_os = "linux")]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonflybsd",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
 use std::fs::File;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
@@ -29,7 +35,13 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::os::raw::c_void;
-#[cfg(target_os = "linux")]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonflybsd",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::ptr;
 use std::sync::Arc;
@@ -203,7 +215,13 @@ impl<'a> DeviceMemoryBuilder<'a> {
     /// # Panic
     ///
     /// - Panics if the import info has already been set.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonflybsd",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     pub fn import_info(
         mut self,
         fd: File,
@@ -480,9 +498,15 @@ impl DeviceMemory {
         Self::map_allocation(device.clone(), mem)
     }
 
-    /// Same as `alloc`, but allows exportable file descriptor on Linux.
+    /// Same as `alloc`, but allows exportable file descriptor on Linux/BSD.
     #[inline]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonflybsd",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     pub fn alloc_with_exportable_fd(
         device: Arc<Device>,
         memory_type: MemoryType,
@@ -500,9 +524,15 @@ impl DeviceMemory {
         Ok(Arc::try_unwrap(memory).unwrap())
     }
 
-    /// Same as `dedicated_alloc`, but allows exportable file descriptor on Linux.
+    /// Same as `dedicated_alloc`, but allows exportable file descriptor on Linux/BSD.
     #[inline]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonflybsd",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     pub fn dedicated_alloc_with_exportable_fd(
         device: Arc<Device>,
         memory_type: MemoryType,
@@ -522,9 +552,15 @@ impl DeviceMemory {
         Ok(Arc::try_unwrap(memory).unwrap())
     }
 
-    /// Same as `alloc_and_map`, but allows exportable file descriptor on Linux.
+    /// Same as `alloc_and_map`, but allows exportable file descriptor on Linux/BSD.
     #[inline]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonflybsd",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     pub fn alloc_and_map_with_exportable_fd(
         device: Arc<Device>,
         memory_type: MemoryType,
@@ -538,9 +574,15 @@ impl DeviceMemory {
         )
     }
 
-    /// Same as `dedicated_alloc_and_map`, but allows exportable file descriptor on Linux.
+    /// Same as `dedicated_alloc_and_map`, but allows exportable file descriptor on Linux/BSD.
     #[inline]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonflybsd",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     pub fn dedicated_alloc_and_map_with_exportable_fd(
         device: Arc<Device>,
         memory_type: MemoryType,
@@ -692,7 +734,13 @@ impl DeviceMemory {
     ///
     /// - Panics if the user requests an invalid handle type for this device memory object.
     #[inline]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonflybsd",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     pub fn export_fd(
         &self,
         handle_type: ExternalMemoryHandleType,
