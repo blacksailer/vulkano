@@ -31,7 +31,7 @@ use crate::memory::pool::MemoryPoolAlloc;
 use crate::memory::pool::PotentialDedicatedAllocation;
 use crate::memory::pool::StdMemoryPoolAlloc;
 use crate::memory::{DedicatedAlloc, MemoryRequirements};
-use crate::memory::{DeviceMemoryAllocError, ExternalMemoryHandleType};
+use crate::memory::DeviceMemoryAllocError;
 use crate::sync::AccessError;
 use crate::sync::Sharing;
 use crate::DeviceSize;
@@ -42,12 +42,20 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 use std::sync::Mutex;
-#[cfg(target_os = "linux")]
-use std::fs::File;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonflybsd",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+use {
+    crate::memory::ExternalMemoryHandleType,
+    std::fs::File
+};
 #[cfg(feature = "win32")]
 #[cfg(target_os = "windows")]
 use std::ptr::NonNull;
-
 /// Buffer whose content is in device-local memory.
 ///
 /// This buffer type is useful in order to store intermediary data. For example you execute a
