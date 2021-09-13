@@ -66,6 +66,53 @@ where
     mem_ty
 }
 
+/// Allocate dedicated memory with exportable fd.
+/// Memory pool memory always exports the same fd, thus dedicated is preferred.
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonflybsd",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+pub(crate) fn alloc_dedicated_with_exportable_fd<F>(
+    device: Arc<Device>,
+    requirements: &MemoryRequirements,
+    layout: AllocLayout,
+    map: MappingRequirement,
+    dedicated: DedicatedAlloc,
+    filter: F,
+) -> Result<PotentialDedicatedAllocation<StdMemoryPoolAlloc>, DeviceMemoryAllocError>
+where
+    F: FnMut(MemoryType) -> AllocFromRequirementsFilter,
+{
+    assert!(device.enabled_extensions().khr_external_memory_fd);
+    assert!(device.enabled_extensions().khr_external_memory);
+
+    let mem_ty = choose_allocation_memory_type(&device, requirements, filter, map);
+
+    match map {
+        MappingRequirement::Map => {
+            let mem = DeviceMemory::dedicated_alloc_and_map_with_exportable_fd(
+                device.clone(),
+                mem_ty,
+                requirements.size,
+                dedicated,
+            )?;
+            Ok(PotentialDedicatedAllocation::DedicatedMapped(mem))
+        }
+        MappingRequirement::DoNotMap => {
+            let mem = DeviceMemory::dedicated_alloc_with_exportable_fd(
+                device.clone(),
+                mem_ty,
+                requirements.size,
+                dedicated,
+            )?;
+            Ok(PotentialDedicatedAllocation::Dedicated(mem))
+        }
+    }
+}
+
 /// Pool of GPU-visible memory that can be allocated from.
 pub unsafe trait MemoryPool: DeviceOwned {
     /// Object that represents a single allocation. Its destructor should free the chunk.
