@@ -28,6 +28,22 @@ use crate::sync::GpuFuture;
 use crate::sync::PipelineStages;
 use crate::sync::Semaphore;
 
+#[inline]
+pub fn then_signal_exported_semaphore<F>(future: F, semaphore: Semaphore) -> SemaphoreSignalFuture<F>
+where
+    F: GpuFuture,
+{
+    let device = future.device().clone();
+
+    assert!(future.queue().is_some()); // TODO: document
+
+    SemaphoreSignalFuture {
+        previous: future,
+        semaphore: semaphore,
+        wait_submitted: Mutex::new(false),
+        finished: AtomicBool::new(false),
+    }
+}
 /// Builds a new semaphore signal future.
 #[inline]
 pub fn then_signal_semaphore<F>(future: F) -> SemaphoreSignalFuture<F>

@@ -12,7 +12,9 @@ keywords = ["vulkan", "bindings", "graphics", "gpu", "rendering"]
 categories = ["rendering::graphics-api"]
 readme = "../README.md"
 build = "build.rs"
-
+[features]
+default = ["win32"]
+win32 = []
 [dependencies]
 # When updating Ash, also update vk.xml to the same Vulkan patch version that Ash uses.
 # All versions of vk.xml can be found at https://github.com/KhronosGroup/Vulkan-Headers/commits/master/registry/vk.xml.

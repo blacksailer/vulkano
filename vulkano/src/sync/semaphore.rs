@@ -16,6 +16,8 @@ use crate::VulkanObject;
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Arc;
+use crate::sync::ExternalSemaphoreHandleType;
+use std::ptr::NonNull;
 
 /// Used to provide synchronization between command buffers during their execution.
 ///
@@ -55,13 +57,40 @@ where
             }
         }
     }
-
+ /// Takes a semaphore from the vulkano-provided exportable semaphore pool.
+    /// If the pool is empty, a new semaphore will be allocated.
+    /// Upon `drop`, the semaphore is put back into the pool.
+    ///
+    /// For most applications, using the pool should be preferred,
+    /// in order to avoid creating new semaphores every frame.
+    #[cfg(feature="win32")]
+    #[cfg(target_os = "windows")]
+    pub fn from_exportable_pool(device: D) -> Result<Semaphore<D>, OomError> {
+        let maybe_raw_sem = device.exportable_semaphore_pool().lock().unwrap().pop();
+        match maybe_raw_sem {
+            Some(raw_sem) => Ok(Semaphore {
+                device: device,
+                semaphore: raw_sem,
+                must_put_in_pool: true,
+            }),
+            None => {
+                // Pool is empty, alloc new semaphore
+                Semaphore::alloc_exportable_impl(device, ExternalSemaphoreHandleType::win32(), true)
+            }
+        }
+    }
     /// Builds a new semaphore.
     #[inline]
     pub fn alloc(device: D) -> Result<Semaphore<D>, OomError> {
         Semaphore::alloc_impl(device, false)
     }
-
+    /// Builds a new exportable semaphore.
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    #[inline]
+    pub fn alloc_exportable(device: D, handle_type: ExternalSemaphoreHandleType) -> Result<Semaphore<D>, OomError> {
+        Semaphore::alloc_exportable_impl(device, handle_type, false)
+    }
     fn alloc_impl(device: D, must_put_in_pool: bool) -> Result<Semaphore<D>, OomError> {
         let semaphore = unsafe {
             // since the creation is constant, we use a `static` instead of a struct on the stack
@@ -87,6 +116,78 @@ where
             must_put_in_pool: must_put_in_pool,
         })
     }
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    fn alloc_exportable_impl(device: D, handle_types: ExternalSemaphoreHandleType, must_put_in_pool: bool) -> Result<Semaphore<D>, OomError> {
+        let semaphore = unsafe {
+            // since the creation is constant, we use a `static` instead of a struct on the stack
+            let mut infos = ash::vk::SemaphoreCreateInfo {
+                flags: ash::vk::SemaphoreCreateFlags::empty(),
+                ..Default::default()
+            };
+
+            let export_win32_info = ash::vk::ExportSemaphoreWin32HandleInfoKHR {
+                dw_access:  2147483649  as ash::vk::DWORD, //DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE
+                ..Default::default()
+            };
+           
+    
+            let mut export_info = ash::vk::ExportSemaphoreCreateInfo {
+                handle_types: ExternalSemaphoreHandleType::win32().into(),
+                ..Default::default()
+            };
+
+            let win32_ptr = &export_win32_info as * const _;
+            export_info.p_next = win32_ptr as * const std::ffi::c_void;
+
+            let ptr = &export_info as * const _;
+            infos.p_next = ptr as * const std::ffi::c_void;
+
+            let fns = device.fns();
+            let mut output = MaybeUninit::uninit();
+            check_errors(fns.v1_0.create_semaphore(
+                device.internal_object(),
+                &infos,
+                ptr::null(),
+                output.as_mut_ptr(),
+            ))?;
+            output.assume_init()
+        };
+
+        Ok(Semaphore {
+            device: device,
+            semaphore: semaphore,
+            must_put_in_pool: must_put_in_pool,
+        })
+    }
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    pub fn get_handle(&self, handle_type: ExternalSemaphoreHandleType) -> Result<NonNull<std::ffi::c_void>, OomError> {
+        let fns = self.device.fns();
+        let bits = ash::vk::ExternalSemaphoreHandleTypeFlags::from(handle_type);
+        // TODO: Check for calling
+        let fd = unsafe {
+            let info = ash::vk::SemaphoreGetWin32HandleInfoKHR {
+                semaphore: self.semaphore,
+                handle_type: ExternalSemaphoreHandleType::win32().into(),
+                ..Default::default()
+            };
+
+            let mut handle = MaybeUninit::uninit();            
+            check_errors(fns.khr_external_semaphore_win32.get_semaphore_win32_handle_khr(
+                self.device.internal_object(),
+                &info,
+                handle.as_mut_ptr()
+            ))?;
+            handle.assume_init()
+        };
+
+
+        Ok(std::ptr::NonNull::new(fd).expect("semaphore handle returned"))
+
+    }
+
+    
 }
 
 unsafe impl DeviceOwned for Semaphore {

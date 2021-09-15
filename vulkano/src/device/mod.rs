@@ -163,6 +163,7 @@ pub struct Device {
     allocation_count: Mutex<u32>,
     fence_pool: Mutex<Vec<ash::vk::Fence>>,
     semaphore_pool: Mutex<Vec<ash::vk::Semaphore>>,
+    exportable_semaphore_pool: Mutex<Vec<ash::vk::Semaphore>>,
     event_pool: Mutex<Vec<ash::vk::Event>>,
 }
 
@@ -384,6 +385,7 @@ impl Device {
             allocation_count: Mutex::new(0),
             fence_pool: Mutex::new(Vec::new()),
             semaphore_pool: Mutex::new(Vec::new()),
+            exportable_semaphore_pool:  Mutex::new(Vec::new()),
             event_pool: Mutex::new(Vec::new()),
         });
 
@@ -544,6 +546,10 @@ impl Device {
         &self.semaphore_pool
     }
 
+    pub(crate) fn exportable_semaphore_pool(&self) -> &Mutex<Vec<ash::vk::Semaphore>> {
+        &self.exportable_semaphore_pool
+    }
+
     pub(crate) fn event_pool(&self) -> &Mutex<Vec<ash::vk::Event>> {
         &self.event_pool
     }
@@ -655,6 +661,11 @@ impl Drop for Device {
                 self.fns
                     .v1_0
                     .destroy_semaphore(self.device, raw_sem, ptr::null());
+            }
+            for &raw_exportable_sem in self.exportable_semaphore_pool.lock().unwrap().iter() {
+                self.fns
+                    .v1_0
+                    .destroy_semaphore(self.device, raw_exportable_sem, ptr::null());
             }
             for &raw_event in self.event_pool.lock().unwrap().iter() {
                 self.fns

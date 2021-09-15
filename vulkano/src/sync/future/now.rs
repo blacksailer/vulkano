@@ -25,12 +25,17 @@ use crate::sync::PipelineStages;
 /// Builds a future that represents "now".
 #[inline]
 pub fn now(device: Arc<Device>) -> NowFuture {
-    NowFuture { device: device }
+    NowFuture { device: device, queue: None }
 }
-
+/// Builds a future that represents "now".
+#[inline]
+pub fn queued_now(device: Arc<Device>, queue: Arc<Queue>) -> NowFuture {
+    NowFuture { device: device, queue: Some(queue) }
+}
 /// A dummy future that represents "now".
 pub struct NowFuture {
     device: Arc<Device>,
+    queue: Option<Arc<Queue>>
 }
 
 unsafe impl GpuFuture for NowFuture {
@@ -57,7 +62,10 @@ unsafe impl GpuFuture for NowFuture {
 
     #[inline]
     fn queue(&self) -> Option<Arc<Queue>> {
-        None
+        match &self.queue {
+            Some(queue) => Some(queue.clone()),
+            _ => None
+        }
     }
 
     #[inline]

@@ -75,6 +75,13 @@ impl ExternalMemoryHandleType {
             ..ExternalMemoryHandleType::none()
         }
     }
+    #[inline]
+    pub fn win32() -> ExternalMemoryHandleType {
+        ExternalMemoryHandleType {
+            opaque_win32: true,
+            ..ExternalMemoryHandleType::none()
+        }
+    }
 }
 
 impl From<ExternalMemoryHandleType> for ash::vk::ExternalMemoryHandleTypeFlags {

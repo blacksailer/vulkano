@@ -108,6 +108,16 @@ pub unsafe trait MemoryPool: DeviceOwned {
         map: MappingRequirement,
     ) -> Result<Self::Alloc, DeviceMemoryAllocError>;
 
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    fn alloc_generic_with_exportable_handle(
+        &self,
+        ty: MemoryType,
+        size: usize,
+        alignment: usize,
+        layout: AllocLayout,
+        map: MappingRequirement,
+    ) -> Result<Self::Alloc, DeviceMemoryAllocError>;
     /// Chooses a memory type and allocates memory from it.
     ///
     /// Contrary to `alloc_generic`, this function may allocate a whole new block of memory
@@ -251,6 +261,68 @@ pub unsafe trait MemoryPool: DeviceOwned {
             }
             MappingRequirement::DoNotMap => {
                 let mem = DeviceMemory::dedicated_alloc_with_exportable_fd(
+                    self.device().clone(),
+                    mem_ty,
+                    requirements.size,
+                    dedicated,
+                )?;
+                Ok(PotentialDedicatedAllocation::Dedicated(mem))
+            }
+        }
+    }
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    fn alloc_from_requirements_with_exportable_handle<F>(
+        &self,
+        requirements: &MemoryRequirements,
+        layout: AllocLayout,
+        map: MappingRequirement,
+        dedicated: DedicatedAlloc,
+        filter: F,
+    ) -> Result<PotentialDedicatedAllocation<Self::Alloc>, DeviceMemoryAllocError>
+    where
+        F: FnMut(MemoryType) -> AllocFromRequirementsFilter,
+    {
+        assert!(self.device().loaded_extensions().khr_external_memory_win32);
+        assert!(self.device().loaded_extensions().khr_external_memory);
+
+        let mem_ty = choose_allocation_memory_type(self.device(), requirements, filter, map);
+
+        if !requirements.prefer_dedicated
+            || !self.device().loaded_extensions().khr_dedicated_allocation
+        {
+            let alloc = self.alloc_generic_with_exportable_handle(
+                mem_ty,
+                requirements.size,
+                requirements.alignment,
+                layout,
+                map,
+            )?;
+            return Ok(alloc.into());
+        }
+        if let DedicatedAlloc::None = dedicated {
+            let alloc = self.alloc_generic_with_exportable_handle(
+                mem_ty,
+                requirements.size,
+                requirements.alignment,
+                layout,
+                map,
+            )?;
+            return Ok(alloc.into());
+        }
+
+        match map {
+            MappingRequirement::Map => {
+                let mem = DeviceMemory::dedicated_alloc_and_map_with_exportable_handle(
+                    self.device().clone(),
+                    mem_ty,
+                    requirements.size,
+                    dedicated,
+                )?;
+                Ok(PotentialDedicatedAllocation::DedicatedMapped(mem))
+            }
+            MappingRequirement::DoNotMap => {
+                let mem = DeviceMemory::dedicated_alloc_with_exportable_handle(
                     self.device().clone(),
                     mem_ty,
                     requirements.size,

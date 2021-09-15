@@ -35,6 +35,9 @@ use crate::Error;
 use crate::OomError;
 use crate::VulkanObject;
 use crate::{buffer::BufferUsage, Version};
+#[cfg(feature = "win32")]
+#[cfg(target_os = "windows")]
+use crate::memory::ExternalMemoryHandleType;
 use ash::vk::Handle;
 use smallvec::SmallVec;
 use std::error;
@@ -248,7 +251,195 @@ impl UnsafeBuffer {
 
         Ok((obj, mem_reqs))
     }
+    pub unsafe fn new_exportable<'a, I>(
+        device: Arc<Device>,
+        size: usize,
+        mut usage: BufferUsage,
+        sharing: Sharing<I>,
+        sparse: Option<SparseLevel>,
+    ) -> Result<(UnsafeBuffer, MemoryRequirements), BufferCreationError>
+    where
+        I: Iterator<Item = u32>,
+    {
+        let fns = device.fns();
 
+        // Ensure we're not trying to create an empty buffer.
+        let size = if size == 0 {
+            // To avoid panicking when allocating 0 bytes, use a 1-byte buffer.
+            1
+        } else {
+            size
+        };
+
+        // Checking sparse features.
+        let flags = if let Some(sparse_level) = sparse {
+            if !device.enabled_features().sparse_binding {
+                return Err(BufferCreationError::SparseBindingFeatureNotEnabled);
+            }
+
+            if sparse_level.sparse_residency && !device.enabled_features().sparse_residency_buffer {
+                return Err(BufferCreationError::SparseResidencyBufferFeatureNotEnabled);
+            }
+
+            if sparse_level.sparse_aliased && !device.enabled_features().sparse_residency_aliased {
+                return Err(BufferCreationError::SparseResidencyAliasedFeatureNotEnabled);
+            }
+
+            sparse_level.into()
+        } else {
+            ash::vk::BufferCreateFlags::empty()
+        };
+
+        if usage.device_address && !device.enabled_features().buffer_device_address {
+            usage.device_address = false;
+            if ash::vk::BufferUsageFlags::from(usage).is_empty() {
+                // return an error iff device_address was the only requested usage and the
+                // feature isn't enabled. Otherwise we'll hit that assert below.
+                // TODO: This is weird, why not just return an error always if the feature is not enabled?
+                // You can't use BufferUsage::all() anymore, but is that a good idea anyway?
+                return Err(BufferCreationError::DeviceAddressFeatureNotEnabled);
+            }
+        }
+
+        let usage_bits = ash::vk::BufferUsageFlags::from(usage);
+        // Checking for empty BufferUsage.
+        assert!(
+            !usage_bits.is_empty(),
+            "Can't create buffer with empty BufferUsage"
+        );
+
+        let buffer = {
+            let (sh_mode, sh_indices) = match sharing {
+                Sharing::Exclusive => {
+                    (ash::vk::SharingMode::EXCLUSIVE, SmallVec::<[u32; 8]>::new())
+                }
+                Sharing::Concurrent(ids) => (ash::vk::SharingMode::CONCURRENT, ids.collect()),
+            };
+
+            let mut p_next = ash::vk::ExternalMemoryBufferCreateInfo{
+                handle_types: ExternalMemoryHandleType::win32().into(),
+                ..Default::default()
+            };
+
+            let infos = ash::vk::BufferCreateInfo::builder()
+            .flags(flags)
+            .size(size as u64)
+            .usage(usage_bits)
+            .sharing_mode(sh_mode)
+            .queue_family_indices(sh_indices.as_slice())
+            .push_next(& mut p_next)
+            .build()
+            ;
+            let mut output = MaybeUninit::uninit();
+            check_errors(fns.v1_0.create_buffer(
+                device.internal_object(),
+                &infos,
+                ptr::null(),
+                output.as_mut_ptr(),
+            ))?;
+            output.assume_init()
+        };
+
+        let mem_reqs = {
+            #[inline]
+            fn align(val: usize, al: usize) -> usize {
+                al * (1 + (val - 1) / al)
+            }
+
+            let mut output = if device.api_version() >= Version::V1_1
+                || device.loaded_extensions().khr_get_memory_requirements2
+            {
+                let infos = ash::vk::BufferMemoryRequirementsInfo2 {
+                    buffer: buffer,
+                    ..Default::default()
+                };
+
+                let mut output2 = if device.loaded_extensions().khr_dedicated_allocation {
+                    Some(ash::vk::MemoryDedicatedRequirementsKHR::default())
+                } else {
+                    None
+                };
+
+                let mut output = ash::vk::MemoryRequirements2 {
+                    p_next: output2
+                        .as_mut()
+                        .map(|o| o as *mut ash::vk::MemoryDedicatedRequirementsKHR)
+                        .unwrap_or(ptr::null_mut()) as *mut _,
+                    ..Default::default()
+                };
+
+                if device.api_version() >= Version::V1_1 {
+                    fns.v1_1.get_buffer_memory_requirements2(
+                        device.internal_object(),
+                        &infos,
+                        &mut output,
+                    );
+                } else {
+                    fns.khr_get_memory_requirements2
+                        .get_buffer_memory_requirements2_khr(
+                            device.internal_object(),
+                            &infos,
+                            &mut output,
+                        );
+                }
+
+                debug_assert!(output.memory_requirements.size >= size as u64);
+                debug_assert!(output.memory_requirements.memory_type_bits != 0);
+
+                let mut out = MemoryRequirements::from(output.memory_requirements);
+                if let Some(output2) = output2 {
+                    debug_assert_eq!(output2.requires_dedicated_allocation, 0);
+                    out.prefer_dedicated = output2.prefers_dedicated_allocation != 0;
+                }
+                out
+            } else {
+                let mut output: MaybeUninit<ash::vk::MemoryRequirements> = MaybeUninit::uninit();
+                fns.v1_0.get_buffer_memory_requirements(
+                    device.internal_object(),
+                    buffer,
+                    output.as_mut_ptr(),
+                );
+                let output = output.assume_init();
+                debug_assert!(output.size >= size as u64);
+                debug_assert!(output.memory_type_bits != 0);
+                MemoryRequirements::from(output)
+            };
+
+            // We have to manually enforce some additional requirements for some buffer types.
+            let properties = device.physical_device().properties();
+            if usage.uniform_texel_buffer || usage.storage_texel_buffer {
+                output.alignment = align(
+                    output.alignment,
+                    properties.min_texel_buffer_offset_alignment.unwrap() as usize,
+                );
+            }
+
+            if usage.storage_buffer {
+                output.alignment = align(
+                    output.alignment,
+                    properties.min_storage_buffer_offset_alignment.unwrap() as usize,
+                );
+            }
+
+            if usage.uniform_buffer {
+                output.alignment = align(
+                    output.alignment,
+                    properties.min_uniform_buffer_offset_alignment.unwrap() as usize,
+                );
+            }
+
+            output
+        };
+
+        let obj = UnsafeBuffer {
+            buffer: buffer,
+            device: device.clone(),
+            size: size as usize,
+            usage,
+        };
+
+        Ok((obj, mem_reqs))
+    }
     /// Binds device memory to this buffer.
     pub unsafe fn bind_memory(&self, memory: &DeviceMemory, offset: usize) -> Result<(), OomError> {
         let fns = self.device.fns();

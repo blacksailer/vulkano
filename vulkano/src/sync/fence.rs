@@ -156,7 +156,7 @@ where
     /// Returns `Ok` if the fence is now signaled. Returns `Err` if the timeout was reached instead.
     ///
     /// If you pass a duration of 0, then the function will return without blocking.
-    pub fn wait(&self, timeout: Option<Duration>) -> Result<(), FenceWaitError> {
+    pub fn  wait(&self, timeout: Option<Duration>) -> Result<(), FenceWaitError> {
         unsafe {
             if self.signaled.load(Ordering::Relaxed) {
                 return Ok(());

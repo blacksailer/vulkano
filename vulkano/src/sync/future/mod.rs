@@ -9,8 +9,8 @@
 
 pub use self::fence_signal::{FenceSignalFuture, FenceSignalFutureBehavior};
 pub use self::join::JoinFuture;
-pub use self::now::{now, NowFuture};
-pub use self::semaphore_signal::SemaphoreSignalFuture;
+pub use self::now::{now,queued_now, NowFuture};
+pub use self::semaphore_signal::{then_signal_exported_semaphore, SemaphoreSignalFuture};
 use crate::buffer::BufferAccess;
 use crate::command_buffer::submit::SubmitAnyBuilder;
 use crate::command_buffer::submit::SubmitBindSparseError;
