@@ -401,7 +401,7 @@ unsafe impl<T: ?Sized, A> DeviceOwned for DeviceLocalBuffer<T, A> {
 
 unsafe impl<T: ?Sized, A> BufferAccess for DeviceLocalBuffer<T, A>
 where
-    T: 'static + Send + Sync,
+    T: Send + Sync + 'static,
     A: Send + Sync,
 {
     #[inline]
@@ -491,7 +491,7 @@ where
 
 unsafe impl<T: ?Sized, A> TypedBufferAccess for DeviceLocalBuffer<T, A>
 where
-    T: 'static + Send + Sync,
+    T: Send + Sync + 'static,
     A: Send + Sync,
 {
     type Content = T;
@@ -499,7 +499,7 @@ where
 
 impl<T: ?Sized, A> PartialEq for DeviceLocalBuffer<T, A>
 where
-    T: 'static + Send + Sync,
+    T: Send + Sync + 'static,
     A: Send + Sync,
 {
     #[inline]
@@ -510,14 +510,14 @@ where
 
 impl<T: ?Sized, A> Eq for DeviceLocalBuffer<T, A>
 where
-    T: 'static + Send + Sync,
+    T: Send + Sync + 'static,
     A: Send + Sync,
 {
 }
 
 impl<T: ?Sized, A> Hash for DeviceLocalBuffer<T, A>
 where
-    T: 'static + Send + Sync,
+    T: Send + Sync + 'static,
     A: Send + Sync,
 {
     #[inline]
