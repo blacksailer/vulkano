@@ -170,8 +170,8 @@ pub unsafe trait MemoryPool: DeviceOwned {
     fn alloc_generic_with_exportable_handle(
         &self,
         ty: MemoryType,
-        size: usize,
-        alignment: usize,
+        size: DeviceSize,
+        alignment: DeviceSize,
         layout: AllocLayout,
         map: MappingRequirement,
     ) -> Result<Self::Alloc, DeviceMemoryAllocError>;
@@ -344,13 +344,13 @@ pub unsafe trait MemoryPool: DeviceOwned {
     where
         F: FnMut(MemoryType) -> AllocFromRequirementsFilter,
     {
-        assert!(self.device().loaded_extensions().khr_external_memory_win32);
-        assert!(self.device().loaded_extensions().khr_external_memory);
+        assert!(self.device().enabled_extensions().khr_external_memory_win32);
+        assert!(self.device().enabled_extensions().khr_external_memory);
 
         let mem_ty = choose_allocation_memory_type(self.device(), requirements, filter, map);
 
         if !requirements.prefer_dedicated
-            || !self.device().loaded_extensions().khr_dedicated_allocation
+            || !self.device().enabled_extensions().khr_dedicated_allocation
         {
             let alloc = self.alloc_generic_with_exportable_handle(
                 mem_ty,

@@ -258,7 +258,7 @@ impl UnsafeBuffer {
     }
     pub unsafe fn new_exportable<'a, I>(
         device: Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         mut usage: BufferUsage,
         sharing: Sharing<I>,
         sparse: Option<SparseLevel>,
@@ -347,19 +347,19 @@ impl UnsafeBuffer {
 
         let mem_reqs = {
             #[inline]
-            fn align(val: usize, al: usize) -> usize {
+            fn align(val: DeviceSize, al: DeviceSize) -> DeviceSize {
                 al * (1 + (val - 1) / al)
             }
 
             let mut output = if device.api_version() >= Version::V1_1
-                || device.loaded_extensions().khr_get_memory_requirements2
+                || device.enabled_extensions().khr_get_memory_requirements2
             {
                 let infos = ash::vk::BufferMemoryRequirementsInfo2 {
                     buffer: buffer,
                     ..Default::default()
                 };
 
-                let mut output2 = if device.loaded_extensions().khr_dedicated_allocation {
+                let mut output2 = if device.enabled_extensions().khr_dedicated_allocation {
                     Some(ash::vk::MemoryDedicatedRequirementsKHR::default())
                 } else {
                     None
@@ -412,24 +412,24 @@ impl UnsafeBuffer {
 
             // We have to manually enforce some additional requirements for some buffer types.
             let properties = device.physical_device().properties();
-            if usage.uniform_texel_buffer || usage.storage_texel_buffer {
+               if usage.uniform_texel_buffer || usage.storage_texel_buffer {
                 output.alignment = align(
                     output.alignment,
-                    properties.min_texel_buffer_offset_alignment.unwrap() as usize,
+                    properties.min_texel_buffer_offset_alignment,
                 );
             }
 
             if usage.storage_buffer {
                 output.alignment = align(
                     output.alignment,
-                    properties.min_storage_buffer_offset_alignment.unwrap() as usize,
+                    properties.min_storage_buffer_offset_alignment,
                 );
             }
 
             if usage.uniform_buffer {
                 output.alignment = align(
                     output.alignment,
-                    properties.min_uniform_buffer_offset_alignment.unwrap() as usize,
+                    properties.min_uniform_buffer_offset_alignment,
                 );
             }
 
@@ -437,9 +437,9 @@ impl UnsafeBuffer {
         };
 
         let obj = UnsafeBuffer {
-            buffer: buffer,
+            buffer,
             device: device.clone(),
-            size: size as usize,
+            size,
             usage,
         };
 

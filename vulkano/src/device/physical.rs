@@ -366,7 +366,7 @@ impl<'a> PhysicalDevice<'a> {
     /// use vulkano::device::physical::PhysicalDevice;
     ///
     /// fn do_something(physical_device: PhysicalDevice) {
-    ///     let _loaded_extensions = physical_device.instance().enabled_extensions();
+    ///     let _enabled_extensions = physical_device.instance().enabled_extensions();
     ///     // ...
     /// }
     /// ```

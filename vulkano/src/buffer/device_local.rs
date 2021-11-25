@@ -61,7 +61,7 @@ use {crate::memory::ExternalMemoryHandleType, std::fs::File};
 
 #[cfg(feature = "win32")]
 #[cfg(target_os = "windows")]
-use std::ptr::NonNull;/// Buffer whose content is in device-local memory.
+use {crate::memory::ExternalMemoryHandleType, std::ptr::NonNull};/// Buffer whose content is in device-local memory.
 ///
 /// This buffer type is useful in order to store intermediary data. For example you execute a
 /// compute shader that writes to this buffer, then read the content of the buffer in a following
@@ -130,7 +130,7 @@ impl<T> DeviceLocalBuffer<[T]> {
         where
             I: IntoIterator<Item = QueueFamily<'a>>
     {
-        unsafe { DeviceLocalBuffer::raw_with_exportable_handle(device, len * std::mem::size_of::<T>(), usage, queue_families) }
+        unsafe { DeviceLocalBuffer::raw_with_exportable_handle(device, (len * std::mem::size_of::<T>()) as DeviceSize, usage, queue_families) }
     }
     /// Builds a new buffer. Can be used for arrays.
     // TODO: unsafe because uninitialized data
@@ -160,15 +160,15 @@ impl<T: ?Sized> DeviceLocalBuffer<T> {
     #[cfg(target_os = "windows")]
     unsafe fn raw_with_exportable_handle<'a, I>(
         device: Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         usage: BufferUsage,
         queue_families: I,
     ) -> Result<Arc<DeviceLocalBuffer<T>>, DeviceMemoryAllocError>
     where
         I: IntoIterator<Item = QueueFamily<'a>>,
     {
-        assert!(device.loaded_extensions().khr_external_memory_win32);
-        assert!(device.loaded_extensions().khr_external_memory);
+        assert!(device.enabled_extensions().khr_external_memory_win32);
+        assert!(device.enabled_extensions().khr_external_memory);
 
         let queue_families = queue_families
             .into_iter()
@@ -327,9 +327,11 @@ impl<T: ?Sized> DeviceLocalBuffer<T> {
         };
         Ok((buffer, mem_reqs))
     }
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
     unsafe fn build_exportable_buffer(
         device: &Arc<Device>,
-        size: usize,
+        size: DeviceSize,
         usage: BufferUsage,
         queue_families: &SmallVec<[u32; 4]>,
     ) -> Result<(UnsafeBuffer, MemoryRequirements), DeviceMemoryAllocError> {

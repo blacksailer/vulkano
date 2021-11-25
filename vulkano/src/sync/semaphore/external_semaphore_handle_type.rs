@@ -61,6 +61,13 @@ impl ExternalSemaphoreHandleType {
             ..ExternalSemaphoreHandleType::none()
         }
     }
+    #[inline]
+    pub fn win32() -> ExternalSemaphoreHandleType {
+        ExternalSemaphoreHandleType {
+            opaque_win32: true,
+            ..ExternalSemaphoreHandleType::none()
+        }
+    }
 }
 
 impl From<ExternalSemaphoreHandleType> for ash::vk::ExternalSemaphoreHandleTypeFlags {

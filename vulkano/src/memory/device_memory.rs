@@ -365,7 +365,7 @@ impl<'a> DeviceMemoryBuilder<'a> {
             }
             if !(import_handle_bits & ash::vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32).is_empty()
             {
-                if !self.device.loaded_extensions().khr_external_memory_win32 {
+                if !self.device.enabled_extensions().khr_external_memory_win32 {
                     return Err(DeviceMemoryAllocError::MissingExtension(
                         "khr_external_memory_win32",
                     ));
@@ -605,7 +605,7 @@ impl DeviceMemory {
     pub fn alloc_with_exportable_handle(
         device: Arc<Device>,
         memory_type: MemoryType,
-        size: usize,
+        size: DeviceSize,
     ) -> Result<DeviceMemory, DeviceMemoryAllocError> {
         let memory = DeviceMemoryBuilder::new(device, memory_type.id(), size)
             .export_info(ExternalMemoryHandleType {
@@ -626,7 +626,7 @@ impl DeviceMemory {
     pub fn dedicated_alloc_with_exportable_handle(
         device: Arc<Device>,
         memory_type: MemoryType,
-        size: usize,
+        size: DeviceSize,
         resource: DedicatedAlloc,
     ) -> Result<DeviceMemory, DeviceMemoryAllocError> {
         let memory = DeviceMemoryBuilder::new(device, memory_type.id(), size)
@@ -649,7 +649,7 @@ impl DeviceMemory {
     pub fn alloc_and_map_with_exportable_handle(
         device: Arc<Device>,
         memory_type: MemoryType,
-        size: usize,
+        size: DeviceSize,
     ) -> Result<MappedDeviceMemory, DeviceMemoryAllocError> {
         DeviceMemory::dedicated_alloc_and_map_with_exportable_handle(
             device,
@@ -666,7 +666,7 @@ impl DeviceMemory {
     pub fn dedicated_alloc_and_map_with_exportable_handle(
         device: Arc<Device>,
         memory_type: MemoryType,
-        size: usize,
+        size: DeviceSize,
         resource: DedicatedAlloc,
     ) -> Result<MappedDeviceMemory, DeviceMemoryAllocError> {
         let fns = device.fns();

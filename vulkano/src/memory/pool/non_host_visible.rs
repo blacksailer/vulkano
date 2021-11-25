@@ -207,14 +207,14 @@ impl StdNonHostVisibleMemoryTypePool {
         #[cfg(target_os = "windows")]
         pub fn alloc_with_exportable_handle(
             me: &Arc<Self>,
-            size: usize,
-            alignment: usize,
-        ) -> Result<StdNonHostVisibleMemoryTypePoolAlloc, DeviceMemoryAllocError> {
+            size: DeviceSize,
+            alignment: DeviceSize,
+            ) -> Result<StdNonHostVisibleMemoryTypePoolAlloc, DeviceMemoryAllocError> {
             assert!(size != 0);
             assert!(alignment != 0);
     
             #[inline]
-            fn align(val: usize, al: usize) -> usize {
+            fn align(val: DeviceSize, al: DeviceSize) -> DeviceSize {
                 al * (1 + (val - 1) / al)
             }
     
@@ -254,7 +254,7 @@ impl StdNonHostVisibleMemoryTypePool {
     
             // We need to allocate a new block.
             let new_block = {
-                const MIN_BLOCK_SIZE: usize = 8 * 1024 * 1024; // 8 MB
+                const MIN_BLOCK_SIZE: DeviceSize = 8 * 1024 * 1024; // 8 MB
                 let to_alloc = cmp::max(MIN_BLOCK_SIZE, size.next_power_of_two());
                 let new_block = DeviceMemory::alloc_with_exportable_handle(
                     me.device.clone(),

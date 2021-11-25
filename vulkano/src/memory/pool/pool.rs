@@ -188,8 +188,8 @@ fn generit_allocation_with_exportable_fd(
 fn generit_allocation_with_exportable_handle(
     mem_pool: Arc<StdMemoryPool>,
     memory_type: MemoryType,
-    size: usize,
-    alignment: usize,
+    size: DeviceSize,
+    alignment: DeviceSize,
     layout: AllocLayout,
     map: MappingRequirement,
 ) -> Result<StdMemoryPoolAlloc, DeviceMemoryAllocError> {
@@ -293,8 +293,8 @@ unsafe impl MemoryPool for Arc<StdMemoryPool> {
     fn alloc_generic_with_exportable_handle(
         &self,
         memory_type: MemoryType,
-        size: usize,
-        alignment: usize,
+        size: DeviceSize,
+        alignment: DeviceSize,
         layout: AllocLayout,
         map: MappingRequirement,
     ) -> Result<StdMemoryPoolAlloc, DeviceMemoryAllocError> {

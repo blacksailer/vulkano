@@ -36,7 +36,7 @@ use crate::swapchain::PresentRegion;
 use crate::swapchain::Surface;
 use crate::swapchain::SurfaceSwapchainLock;
 use crate::swapchain::SurfaceTransform;
-use crate::sync::semaphore::SemaphoreError;
+use crate::sync::SemaphoreError;
 use crate::sync::AccessCheckError;
 use crate::sync::AccessError;
 use crate::sync::AccessFlags;
