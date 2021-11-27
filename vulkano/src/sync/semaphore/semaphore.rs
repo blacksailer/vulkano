@@ -227,7 +227,7 @@ where
     pub fn alloc_with_exportable_handle(device: D) -> Result<Semaphore<D>, SemaphoreError> {
         SemaphoreBuilder::new(device)
             .export_info(ExternalSemaphoreHandleType::win32())
-            .build()
+            .build_exportable_win()
     }
     /// Same as `alloc`, but allows exportable opaque file descriptor on Linux/BSD
     #[inline]
