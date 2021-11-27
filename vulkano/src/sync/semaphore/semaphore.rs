@@ -34,6 +34,9 @@ use std::mem::MaybeUninit;
 use std::os::unix::io::FromRawFd;
 use std::ptr;
 use std::sync::Arc;
+#[cfg(feature="win32")]
+#[cfg(target_os = "windows")]
+use std::ptr::NonNull;
 
 use crate::sync::semaphore::ExternalSemaphoreHandleType;
 
@@ -100,7 +103,61 @@ where
 
         self
     }
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    fn build_exportable_win(self) -> Result<Semaphore<D>, SemaphoreError> {
+        if self.export_info.is_some()
+            && !self
+                .device
+                .instance()
+                .enabled_extensions()
+                .khr_external_semaphore_capabilities
+        {
+            Err(SemaphoreError::MissingExtension(
+                "khr_external_semaphore_capabilities",
+            ))
+        } else {
+            let semaphore = unsafe {
+                // since the creation is constant, we use a `static` instead of a struct on the stack
+                let mut infos = ash::vk::SemaphoreCreateInfo {
+                    flags: ash::vk::SemaphoreCreateFlags::empty(),
+                    ..Default::default()
+                };
 
+                let export_win32_info = ash::vk::ExportSemaphoreWin32HandleInfoKHR {
+                    dw_access:  2147483649  as ash::vk::DWORD, //DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE
+                    ..Default::default()
+                };
+            
+        
+                let mut export_info = ash::vk::ExportSemaphoreCreateInfo {
+                    handle_types: ExternalSemaphoreHandleType::win32().into(),
+                    ..Default::default()
+                };
+
+                let win32_ptr = &export_win32_info as * const _;
+                export_info.p_next = win32_ptr as * const std::ffi::c_void;
+
+                let ptr = &export_info as * const _;
+                infos.p_next = ptr as * const std::ffi::c_void;
+
+                let fns = self.device.fns();
+                let mut output = MaybeUninit::uninit();
+                check_errors(fns.v1_0.create_semaphore(
+                    self.device.internal_object(),
+                    &infos,
+                    ptr::null(),
+                    output.as_mut_ptr(),
+                ))?;
+                output.assume_init()
+            };
+
+            Ok(Semaphore {
+                device: self.device,
+                semaphore,
+                must_put_in_pool: self.must_put_in_pool,            })
+        }
+    }
     pub fn build(self) -> Result<Semaphore<D>, SemaphoreError> {
         if self.export_info.is_some()
             && !self
@@ -164,7 +221,14 @@ where
     pub fn alloc(device: D) -> Result<Semaphore<D>, SemaphoreError> {
         SemaphoreBuilder::new(device).build()
     }
-
+    #[inline]
+    #[cfg(feature="win32")]
+    #[cfg(target_os = "windows")]
+    pub fn alloc_with_exportable_handle(device: D) -> Result<Semaphore<D>, SemaphoreError> {
+        SemaphoreBuilder::new(device)
+            .export_info(ExternalSemaphoreHandleType::win32())
+            .build()
+    }
     /// Same as `alloc`, but allows exportable opaque file descriptor on Linux/BSD
     #[inline]
     #[cfg(any(
@@ -210,6 +274,31 @@ where
         };
         let file = unsafe { File::from_raw_fd(fd) };
         Ok(file)
+    }
+    #[cfg(feature = "win32")]
+    #[cfg(target_os = "windows")]
+    pub fn get_handle(&self) -> Result<NonNull<std::ffi::c_void>, OomError> {
+        let fns = self.device.fns();
+        let bits = ash::vk::ExternalSemaphoreHandleTypeFlags::from(ExternalSemaphoreHandleType::win32());
+        // TODO: Check for calling
+        let fd = unsafe {
+            let info = ash::vk::SemaphoreGetWin32HandleInfoKHR {
+                semaphore: self.semaphore,
+                handle_type: ExternalSemaphoreHandleType::win32().into(),
+                ..Default::default()
+            };
+
+            let mut handle = MaybeUninit::uninit();            
+            check_errors(fns.khr_external_semaphore_win32.get_semaphore_win32_handle_khr(
+                self.device.internal_object(),
+                &info,
+                handle.as_mut_ptr()
+            ))?;
+            handle.assume_init()
+        };
+
+
+        Ok(std::ptr::NonNull::new(fd).expect("semaphore handle returned"))
     }
 }
 
